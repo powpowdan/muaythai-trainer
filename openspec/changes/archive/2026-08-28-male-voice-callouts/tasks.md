@@ -16,4 +16,4 @@
 ## 4. Verification
 
 - [x] 4.1 Gates: `tsc --noEmit`, engine tests, web export bundle
-- [ ] 4.2 Ear check in web preview: voice is male, combo words land on the beat, announcements sound natural; regenerate with adjusted voice/rate if not
+- [x] 4.2 Ear check in web preview: voice is male, combo words land on the beat, announcements sound natural; regenerate with adjusted voice/rate if not
