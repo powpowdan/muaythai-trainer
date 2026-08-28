@@ -40,13 +40,18 @@ describe('move catalog integrity', () => {
     }
   });
 
-  it('punch numbers one through six exist with digit display text', () => {
+  it('jab and cross are called by name; punches three to six by number', () => {
     const punches = CATALOG.filter((m) => m.type === 'punch');
     const byCallout = new Map(punches.map((m) => [m.calloutText, m]));
-    for (const word of ['one', 'two', 'three', 'four', 'five', 'six']) {
+    expect(byCallout.has('jab'), 'missing punch jab').toBe(true);
+    expect(byCallout.has('cross'), 'missing punch cross').toBe(true);
+    for (const word of ['three', 'four', 'five', 'six']) {
       expect(byCallout.has(word), `missing punch ${word}`).toBe(true);
     }
-    for (const m of punches) {
+    for (const m of punches.filter((p) => p.calloutText === 'jab' || p.calloutText === 'cross')) {
+      expect(m.displayText, `${m.id}: display should match callout word`).toBe(m.calloutText);
+    }
+    for (const m of punches.filter((p) => p.calloutText !== 'jab' && p.calloutText !== 'cross')) {
       expect(m.displayText, `${m.id}: punch display should be a digit`).toMatch(/^\d$/);
     }
   });

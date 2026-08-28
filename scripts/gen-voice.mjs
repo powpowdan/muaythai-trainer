@@ -1,4 +1,4 @@
-import { mkdirSync, renameSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, readdirSync, renameSync, rmSync, unlinkSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { MsEdgeTTS, OUTPUT_FORMAT } from 'msedge-tts';
@@ -36,6 +36,15 @@ function emphasize(text) {
 rmSync(TMP_DIR, { recursive: true, force: true });
 mkdirSync(TMP_DIR, { recursive: true });
 mkdirSync(VOICE_DIR, { recursive: true });
+
+// Remove clips the current vocabulary no longer uses (e.g. renamed callouts).
+const keep = new Set(VOICE_CLIP_TEXTS.map((t) => `${slug(t)}.mp3`));
+for (const file of readdirSync(VOICE_DIR)) {
+  if (file.endsWith('.mp3') && !keep.has(file)) {
+    unlinkSync(join(VOICE_DIR, file));
+    console.log(`- removed orphan ${file}`);
+  }
+}
 
 const written = [];
 for (const text of VOICE_CLIP_TEXTS) {

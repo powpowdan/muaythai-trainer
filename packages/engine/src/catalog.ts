@@ -6,9 +6,9 @@ import type { Move } from './types';
 // variants share a callout word — the side distinction exists for the
 // grammar's sequencing rules, not for the voice.
 export const CATALOG: Move[] = [
-  // Punches 1-6
-  { id: 'jab', side: 'lead', type: 'punch', power: 'light', calloutText: 'one', displayText: '1' },
-  { id: 'cross', side: 'rear', type: 'punch', power: 'power', calloutText: 'two', displayText: '2' },
+  // Punches: jab and cross by name, three to six by number (gym convention)
+  { id: 'jab', side: 'lead', type: 'punch', power: 'light', calloutText: 'jab', displayText: 'jab' },
+  { id: 'cross', side: 'rear', type: 'punch', power: 'power', calloutText: 'cross', displayText: 'cross' },
   { id: 'lead-hook', side: 'lead', type: 'punch', power: 'power', calloutText: 'three', displayText: '3' },
   { id: 'rear-hook', side: 'rear', type: 'punch', power: 'power', calloutText: 'four', displayText: '4' },
   { id: 'lead-uppercut', side: 'lead', type: 'punch', power: 'power', calloutText: 'five', displayText: '5' },
