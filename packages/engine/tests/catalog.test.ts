@@ -40,19 +40,14 @@ describe('move catalog integrity', () => {
     }
   });
 
-  it('jab and cross are called by name; punches three to six by number', () => {
+  it('punches are jab, cross, and hook (lead and rear share the word)', () => {
     const punches = CATALOG.filter((m) => m.type === 'punch');
-    const byCallout = new Map(punches.map((m) => [m.calloutText, m]));
-    expect(byCallout.has('jab'), 'missing punch jab').toBe(true);
-    expect(byCallout.has('cross'), 'missing punch cross').toBe(true);
-    for (const word of ['three', 'four', 'five', 'six']) {
-      expect(byCallout.has(word), `missing punch ${word}`).toBe(true);
-    }
-    for (const m of punches.filter((p) => p.calloutText === 'jab' || p.calloutText === 'cross')) {
+    const ids = punches.map((m) => m.id).sort();
+    expect(ids).toEqual(['cross', 'jab', 'lead-hook', 'rear-hook']);
+    expect(punches.filter((m) => m.calloutText === 'hook').length, 'both hooks say hook').toBe(2);
+    for (const m of punches) {
       expect(m.displayText, `${m.id}: display should match callout word`).toBe(m.calloutText);
     }
-    for (const m of punches.filter((p) => p.calloutText !== 'jab' && p.calloutText !== 'cross')) {
-      expect(m.displayText, `${m.id}: punch display should be a digit`).toMatch(/^\d$/);
-    }
+    expect(CATALOG.some((m) => m.id.includes('uppercut')), 'uppercuts removed').toBe(false);
   });
 });

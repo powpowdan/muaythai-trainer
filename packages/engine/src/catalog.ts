@@ -6,13 +6,12 @@ import type { Move } from './types';
 // variants share a callout word — the side distinction exists for the
 // grammar's sequencing rules, not for the voice.
 export const CATALOG: Move[] = [
-  // Punches: jab and cross by name, three to six by number (gym convention)
+  // Punches: jab, cross, hook by name; lead/rear hooks share the word
+  // (side is implied by sequence — same pattern as kicks). Uppercuts cut.
   { id: 'jab', side: 'lead', type: 'punch', power: 'light', calloutText: 'jab', displayText: 'jab' },
   { id: 'cross', side: 'rear', type: 'punch', power: 'power', calloutText: 'cross', displayText: 'cross' },
-  { id: 'lead-hook', side: 'lead', type: 'punch', power: 'power', calloutText: 'three', displayText: '3' },
-  { id: 'rear-hook', side: 'rear', type: 'punch', power: 'power', calloutText: 'four', displayText: '4' },
-  { id: 'lead-uppercut', side: 'lead', type: 'punch', power: 'power', calloutText: 'five', displayText: '5' },
-  { id: 'rear-uppercut', side: 'rear', type: 'punch', power: 'power', calloutText: 'six', displayText: '6' },
+  { id: 'lead-hook', side: 'lead', type: 'punch', power: 'power', calloutText: 'hook', displayText: 'hook' },
+  { id: 'rear-hook', side: 'rear', type: 'punch', power: 'power', calloutText: 'hook', displayText: 'hook' },
   // Kicks
   { id: 'rear-kick', side: 'rear', type: 'kick', power: 'power', calloutText: 'kick', displayText: 'kick' },
   { id: 'lead-kick', side: 'lead', type: 'kick', power: 'power', calloutText: 'kick', displayText: 'kick' },
