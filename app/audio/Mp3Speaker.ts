@@ -67,7 +67,14 @@ export function createMp3Speaker(strikeSeconds: number): Speaker {
     },
     warmUp() {
       for (const source of Object.values(VOICE_CLIPS)) {
-        void preload(source).catch(() => undefined);
+        try {
+          // preload() returns void on web and possibly a Promise on native —
+          // handle both, and never let warm-up break app start.
+          const result: unknown = preload(source);
+          if (result instanceof Promise) result.catch(() => undefined);
+        } catch {
+          // Warm-up is best-effort; playback falls back to TTS on failure.
+        }
       }
     },
   };
