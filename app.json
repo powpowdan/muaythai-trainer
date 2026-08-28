@@ -1,0 +1,35 @@
+{
+  "expo": {
+    "name": "Muaythai Trainer",
+    "slug": "muaythai-trainer",
+    "version": "0.1.0",
+    "scheme": "muaythai",
+    "orientation": "portrait",
+    "userInterfaceStyle": "dark",
+    "newArchEnabled": true,
+    "platforms": [
+      "android",
+      "web"
+    ],
+    "ios": {
+      "bundleIdentifier": "com.muaythai.trainer"
+    },
+    "android": {
+      "package": "com.muaythai.trainer"
+    },
+    "plugins": [
+      "expo-router",
+      [
+        "expo-audio",
+        {
+          "enableBackgroundPlayback": true,
+          "recordAudioAndroid": false
+        }
+      ],
+      "expo-status-bar"
+    ],
+    "experiments": {
+      "typedRoutes": true
+    }
+  }
+}

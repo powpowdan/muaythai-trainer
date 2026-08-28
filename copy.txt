@@ -1,0 +1,31 @@
+ Hey all,
+
+I'm excited to share a project I've been working on (oow.ee). As both a developer and a fan of Boxing & Muay Thai, I've built an app for my own training and hopefully for others too. The app helps me keep shadowboxing and bag work fresh, engaging, and exciting. The app is called OOWEE.
+
+Video intro: https://www.youtube.com/shorts/posVDz89o-4
+
+What is OOWEE?
+
+OOWEE is an audio-guided Boxing/Muay Thai workout app that calls out combinations for you to throw in real-time. You personalise exactly what moves you want to practice, and the app creates a completely randomised workout on the spot. Just listen and strike. Many hours have been put into refining how the app feels and flows during workouts - this was the hardest thing to get right.
+
+Why I built it
+
+I got bored of repetitive training routines and YouTube workout videos. After many hours of testing different combinations and flows, I've created something that I think feels natural and keeps me engaged throughout my entire session. It's even helped me learn new combinations.
+
+Features include
+
+    Full personalisation of moves, intensity, and workout duration
+
+    Different action types that keep training fresh and unpredictable
+
+    Works completely offline once downloaded
+
+    Play your music simultaneously (highly recommended) while hearing the callouts
+
+Whether you're looking to lose weight, sharpen your technique, or just make your bag sessions more interesting, OOWEE adapts to your needs.
+
+I just launched on the iOS App Store! Check out my landing page at oow.ee (there's a short demo at the top of the page here that you can try immediately) search for "OOWEE Boxing" on the app store, or click this app store link. There's a free trial so you can properly test it out, with monthly and annual subscription options afterward.
+
+I'd love to hear your feedback if you try it out. This is just the beginning, and I'm excited to keep improving based on community input.
+
+Thank you! 
