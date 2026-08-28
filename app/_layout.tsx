@@ -3,12 +3,15 @@ import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { createSpeaker } from './audio/Speaker';
+import { createMp3Speaker } from './audio/Mp3Speaker';
 
 export default function RootLayout() {
   useEffect(() => {
-    // Warm the TTS engine at app start so the first callout of a session
-    // meets the 250ms timing budget (design D4).
+    // Warm both audio paths at app start: device TTS (fallback) and the
+    // bundled voice clips, so the first callout of a session meets the
+    // 250ms timing budget.
     createSpeaker().warmUp();
+    createMp3Speaker(0.75).warmUp();
   }, []);
 
   return (

@@ -2,7 +2,8 @@ import { useEffect, useRef, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { setAudioModeAsync } from 'expo-audio';
-import { createSpeaker } from './audio/Speaker';
+import { INTENSITY_PARAMS } from '@muaythai/engine';
+import { createMp3Speaker } from './audio/Mp3Speaker';
 import { createSfx } from './audio/Sfx';
 import { PlaybackController, type PlaybackState } from './playback/PlaybackController';
 import { clearCurrentTimeline, takeCurrentTimeline } from './session';
@@ -19,7 +20,9 @@ export default function PlayerScreen() {
     const controller = new PlaybackController(
       timeline,
       {
-        speaker: createSpeaker(),
+        speaker: createMp3Speaker(
+          INTENSITY_PARAMS[timeline.config.intensity].strikeSeconds,
+        ),
         sfx: createSfx(),
         configureAudio: () =>
           setAudioModeAsync({
