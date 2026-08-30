@@ -36,7 +36,7 @@ function scheduleWorkRound(
 
   let t = start + INITIAL_GRACE_SECONDS;
   while (t < end - BELL_SAFETY_MARGIN) {
-    const moveIds = generateCombo(rng, params, strikes);
+    const moveIds = generateCombo(rng, params, strikes, { backEnabled: !disabled.has('step-back') });
     if (moveIds.length < 2) break; // not enough enabled strikes to build combos
     const duration = moveIds.length * params.strikeSeconds + 0.4;
     if (t + duration > end - BELL_SAFETY_MARGIN) break;

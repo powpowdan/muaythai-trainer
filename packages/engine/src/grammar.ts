@@ -83,10 +83,50 @@ const TEMPLATES: { slots: SlotRole[]; weight: number }[] = [
 const MAX_RETRIES = 8;
 const ALLOWED_REPEATS = new Set(['jab', 'lead-teep', 'rear-teep']);
 
+// ---------------------------------------------------------------------------
+// Range rules — elbows close the distance; 'back' is the voiced step-out.
+// ---------------------------------------------------------------------------
+const CLINCH_TYPES = new Set(['elbow', 'knee']);
+const HOOK_IDS = new Set(['lead-hook', 'rear-hook']);
+const TEEP_IDS = new Set(['lead-teep', 'rear-teep']);
+const STEP_BACK_ID = 'step-back';
+
+/** Probability the voiced step-out is inserted after an elbow (tuning knob). */
+const BACK_EXIT_CHANCE = 0.4;
+
+// Rarity weights — affect draw probability only, never legality.
+const ELBOW_HOOK_WEIGHT = 0.15;
+const KNEE_KICK_WEIGHT = 0.35;
+const KNEE_TEEP_WEIGHT = 0.1;
+
+export interface ComboOptions {
+  /** Whether 'step-back' may be inserted as a voiced exit after elbows. */
+  backEnabled: boolean;
+}
+
 /** Transition constraint: can `next` follow `prev`? */
 function canFollow(prev: Move, next: Move): boolean {
-  // Same-side power chains are unnatural — except trained doubles (jab, teep).
-  if (prev.power === 'power' && next.power === 'power' && prev.side === next.side) {
+  // The step-out exits only the elbow lock, and you don't step straight
+  // back in (or out again) immediately after stepping out.
+  if (prev.id === STEP_BACK_ID) {
+    return next.id !== STEP_BACK_ID && next.type !== 'elbow';
+  }
+  if (next.id === STEP_BACK_ID) {
+    return prev.type === 'elbow';
+  }
+  // Elbow lock: once in close, only clinch strikes or a short hook follow.
+  if (prev.type === 'elbow' && !CLINCH_TYPES.has(next.type) && !HOOK_IDS.has(next.id)) {
+    return false;
+  }
+  // Same-side power chains are unnatural — except trained doubles (jab, teep)
+  // and clinch chains, where rotation carries through in close.
+  const clinchChain = CLINCH_TYPES.has(prev.type) && CLINCH_TYPES.has(next.type);
+  if (
+    prev.power === 'power' &&
+    next.power === 'power' &&
+    prev.side === next.side &&
+    !clinchChain
+  ) {
     return false;
   }
   // Same-side kick into kick ignores rotation/recovery.
@@ -127,14 +167,31 @@ function isSetup(move: Move): boolean {
   return move.side === 'lead' && move.power === 'light';
 }
 
+/** Draw weight for `next` given `prev` — rarity tuning, never legality. */
+function candidateWeight(prev: Move | null, next: Move): number {
+  if (!prev) return 1;
+  if (prev.type === 'elbow' && HOOK_IDS.has(next.id)) return ELBOW_HOOK_WEIGHT;
+  if (prev.type === 'knee') {
+    if (TEEP_IDS.has(next.id)) return KNEE_TEEP_WEIGHT;
+    if (next.type === 'kick') return KNEE_KICK_WEIGHT;
+  }
+  return 1;
+}
+
 /**
  * Generate one combo. Bounded retries with fresh rng draws; falls back to a
  * minimal [setup, opposite-side power] combo when constraints are tight
  * (e.g. very few enabled moves).
  */
-export function generateCombo(rng: Rng, params: IntensityParams, strikes: Move[]): string[] {
+export function generateCombo(
+  rng: Rng,
+  params: IntensityParams,
+  strikes: Move[],
+  options: ComboOptions = { backEnabled: true },
+): string[] {
   if (strikes.length === 0) return [];
 
+  const stepBack = MOVES_BY_ID.get(STEP_BACK_ID)!;
   const usable = TEMPLATES.filter(
     (t) => t.slots.length >= params.minLen && t.slots.length <= params.maxLen,
   );
@@ -143,9 +200,11 @@ export function generateCombo(rng: Rng, params: IntensityParams, strikes: Move[]
   for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
     const template = weightedPick(rng, templates, (t) => t.weight);
     const combo: Move[] = [];
+    let backUsed = false;
     let ok = true;
 
-    for (const role of template.slots) {
+    for (let slot = 0; slot < template.slots.length; slot++) {
+      const role = template.slots[slot];
       let candidates = roleCandidates(role, strikes);
       if (role === 'open' && rng() < params.leadOpeningBias) {
         const setups = candidates.filter(isSetup);
@@ -164,7 +223,20 @@ export function generateCombo(rng: Rng, params: IntensityParams, strikes: Move[]
         ok = false;
         break;
       }
-      combo.push(weightedPick(rng, candidates, () => 1));
+      const prev = combo.length > 0 ? combo[combo.length - 1] : null;
+      combo.push(weightedPick(rng, candidates, (m) => candidateWeight(prev, m)));
+
+      // Free 'back' exit after an elbow — spoken step-out, no slot consumed.
+      if (
+        options.backEnabled &&
+        !backUsed &&
+        combo[combo.length - 1].type === 'elbow' &&
+        slot < template.slots.length - 1 &&
+        rng() < BACK_EXIT_CHANCE
+      ) {
+        combo.push(stepBack);
+        backUsed = true;
+      }
     }
 
     if (ok && combo.length >= 2 && validateCombo(combo.map((m) => m.id))) {
@@ -189,8 +261,9 @@ export function generateCombos(config: WorkoutConfig, count: number): string[][]
   const rng = createRng(config.seed);
   const params = INTENSITY_PARAMS[config.intensity];
   const strikes = enabledStrikes(config);
+  const options: ComboOptions = { backEnabled: !config.disabledMoveIds.includes(STEP_BACK_ID) };
   const combos: string[][] = [];
-  for (let i = 0; i < count; i++) combos.push(generateCombo(rng, params, strikes));
+  for (let i = 0; i < count; i++) combos.push(generateCombo(rng, params, strikes, options));
   return combos;
 }
 
