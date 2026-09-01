@@ -15,7 +15,12 @@
       "bundleIdentifier": "com.muaythai.trainer"
     },
     "android": {
-      "package": "com.muaythai.trainer"
+      "package": "com.muaythai.trainer",
+      "permissions": [
+        "android.permission.MODIFY_AUDIO_SETTINGS",
+        "android.permission.FOREGROUND_SERVICE",
+        "android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK"
+      ]
     },
     "plugins": [
       "expo-router",
@@ -30,6 +35,12 @@
     ],
     "experiments": {
       "typedRoutes": true
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "70ee1495-3325-46fc-adb6-3145c06797cb"
+      }
     }
   }
 }
