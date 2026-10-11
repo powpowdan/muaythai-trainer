@@ -1,6 +1,5 @@
 import { Platform } from 'react-native';
 import {
-  clearAllPreloadedSources,
   createAudioPlayer,
   requestNotificationPermissionsAsync,
   type AudioPlayer,
@@ -35,6 +34,30 @@ export function createSfx(): Sfx {
   // controls wired to pause/resume via isExternallyPaused().
   const keepalive = createAudioPlayer(require('../assets/audio/silence.wav'));
 
+  // A keepalive that never started or has errored must NOT read as an
+  // external pause — otherwise an audio failure freezes the workout timer
+  // on its first tick. Only a player that actually played and then paused
+  // (lock-screen controls) counts as external.
+  let everPlayed = false;
+  let degraded = false;
+  keepalive.addListener('playbackStatusUpdate', (status) => {
+    if (status.error) {
+      degraded = true;
+      tryClearLockScreenControls();
+      return;
+    }
+    if (status.playing) everPlayed = true;
+  });
+
+  function tryClearLockScreenControls(): void {
+    if (isWeb) return;
+    try {
+      keepalive.clearLockScreenControls();
+    } catch {
+      // Best-effort — the service may already be gone.
+    }
+  }
+
   return {
     playBell(kind: BellKind) {
       const player = bells[kind];
@@ -45,45 +68,63 @@ export function createSfx(): Sfx {
       // Lock-screen controls, notification permissions and the media
       // foreground service are native-only concepts; web just plays audio.
       if (isWeb) return;
-      // Android shows media controls in the notification shade only when the
-      // POST_NOTIFICATIONS permission is granted.
       try {
-        await requestNotificationPermissionsAsync();
-      } catch {
-        // Controls still work from inside the app without the permission.
+        // Android shows media controls in the notification shade only when the
+        // POST_NOTIFICATIONS permission is granted.
+        try {
+          await requestNotificationPermissionsAsync();
+        } catch {
+          // Controls still work from inside the app without the permission.
+        }
+        keepalive.loop = true;
+        keepalive.volume = 0;
+        keepalive.setActiveForLockScreen(true, {
+          title: 'Workout',
+          artist: 'Muaythai Trainer',
+        });
+        keepalive.play();
+      } catch (err) {
+        // Degraded mode: no keepalive, no lock-screen controls — but the
+        // session continues with timer and callouts unaffected.
+        degraded = true;
+        console.warn('[Sfx] media session failed to start; continuing without lock-screen controls', err);
+        tryClearLockScreenControls();
       }
-      keepalive.loop = true;
-      keepalive.volume = 0;
-      keepalive.setActiveForLockScreen(true, {
-        title: 'Workout',
-        artist: 'Muaythai Trainer',
-      });
-      keepalive.play();
     },
     isExternallyPaused() {
-      return isWeb ? false : keepalive.paused;
+      if (isWeb || degraded) return false;
+      return everPlayed && keepalive.paused;
     },
     setPaused(paused: boolean) {
       if (isWeb) return;
-      if (paused) {
-        keepalive.pause();
-      } else {
-        keepalive.play();
+      try {
+        if (paused) {
+          keepalive.pause();
+        } else {
+          keepalive.play();
+        }
+      } catch (err) {
+        console.warn('[Sfx] keepalive transport failed', err);
       }
     },
     setMetadata(title: string) {
-      if (isWeb) return;
+      if (isWeb || degraded) return;
       keepalive.updateLockScreenMetadata({
         title,
         artist: 'Muaythai Trainer',
       });
     },
     endSession() {
-      keepalive.pause();
-      if (!isWeb) keepalive.clearLockScreenControls();
+      try {
+        keepalive.pause();
+      } catch {
+        // Best-effort teardown.
+      }
+      tryClearLockScreenControls();
       keepalive.remove();
       for (const player of Object.values(bells)) player.remove();
-      clearAllPreloadedSources();
+      // The preloaded voice-clip byte cache is intentionally kept so the
+      // app-start warm-up survives across sessions.
     },
   };
 }

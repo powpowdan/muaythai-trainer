@@ -4,38 +4,32 @@ import { slug } from '@muaythai/engine';
 import { VOICE_CLIPS } from './voice-manifest';
 import type { Speaker } from './Speaker';
 
-const CLIP_RELEASE_BACKSTOP_MS = 5000;
-
 /**
  * Speaker backed by bundled male-voice MP3 clips. Combos play word-by-word
  * at the workout's strike tempo; announcements play as single clips. Any
  * text without clips falls back to device TTS for the whole utterance.
+ *
+ * Each clip is played by a pooled, lazily-created AudioPlayer replayed via
+ * seekTo(0) + play(). A player must NEVER be created per word: expo-audio
+ * releases native players only on JS GC, so per-word players leak an open
+ * AudioTrack each and exhaust Android's per-app track limit (~32) about 90
+ * seconds into a moderate session.
  */
 export function createMp3Speaker(strikeSeconds: number): Speaker {
+  const pool = new Map<string, AudioPlayer>();
   const pendingTimeouts: ReturnType<typeof setTimeout>[] = [];
-  const activePlayers: AudioPlayer[] = [];
-  const releaseTimeouts: ReturnType<typeof setTimeout>[] = [];
 
   const playClip = (name: string): boolean => {
     const source = VOICE_CLIPS[name];
     if (source === undefined) return false;
-    const player = createAudioPlayer(source);
-    activePlayers.push(player);
-    player.addListener('playbackStatusUpdate', (status) => {
-      if (status.didJustFinish) releasePlayer(player);
-    });
-    // Backstop in case the finish event never fires (e.g. clip replaced).
-    releaseTimeouts.push(
-      setTimeout(() => releasePlayer(player), CLIP_RELEASE_BACKSTOP_MS),
-    );
+    let player = pool.get(name);
+    if (!player) {
+      player = createAudioPlayer(source);
+      pool.set(name, player);
+    }
+    player.seekTo(0);
     player.play();
     return true;
-  };
-
-  const releasePlayer = (player: AudioPlayer): void => {
-    const idx = activePlayers.indexOf(player);
-    if (idx >= 0) activePlayers.splice(idx, 1);
-    player.remove();
   };
 
   return {
@@ -56,13 +50,19 @@ export function createMp3Speaker(strikeSeconds: number): Speaker {
     },
     stop() {
       for (const t of pendingTimeouts) clearTimeout(t);
-      for (const t of releaseTimeouts) clearTimeout(t);
       pendingTimeouts.length = 0;
-      releaseTimeouts.length = 0;
-      for (const player of [...activePlayers]) {
+      // Paused pool players stay usable; the next playClip() seeks to 0.
+      for (const player of pool.values()) player.pause();
+      Speech.stop();
+    },
+    dispose() {
+      for (const t of pendingTimeouts) clearTimeout(t);
+      pendingTimeouts.length = 0;
+      for (const player of pool.values()) {
         player.pause();
-        releasePlayer(player);
+        player.remove();
       }
+      pool.clear();
       Speech.stop();
     },
     warmUp() {

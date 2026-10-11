@@ -1,10 +1,10 @@
 import { MOVES_BY_ID, type TimelineEvent, type WorkoutTimeline } from '@muaythai/engine';
 
 export interface PlaybackDeps {
-  speaker: { speak(text: string): void; stop(): void };
+  speaker: { speak(text: string): void; stop(): void; dispose(): void };
   sfx: {
     playBell(kind: 'round-start' | 'round-end' | 'final'): void;
-    startSession(): void;
+    startSession(): void | Promise<void>;
     isExternallyPaused(): boolean;
     setPaused(paused: boolean): void;
     setMetadata(title: string): void;
@@ -21,6 +21,8 @@ export interface PlaybackState {
   currentComboText: string | null;
   recentCombos: string[];
   isPaused: boolean;
+  /** Audio setup failed — the timer runs on without sound/lock-screen controls. */
+  startError: boolean;
 }
 
 const TICK_MS = 100;
@@ -38,6 +40,7 @@ export class PlaybackController {
   private dispatched = 0;
   private selfPaused = false;
   private ended = false;
+  private startError = false;
   private lastState = '';
 
   constructor(
@@ -53,8 +56,18 @@ export class PlaybackController {
   }
 
   async start(): Promise<void> {
-    await this.deps.configureAudio();
-    this.deps.sfx.startSession();
+    // Audio setup failure must never block the timeline: the timer keeps
+    // running silent and the UI surfaces the error via state.startError.
+    try {
+      await this.deps.configureAudio();
+      await this.deps.sfx.startSession();
+    } catch (err) {
+      console.warn('[PlaybackController] audio setup failed; continuing silent', err);
+      this.startError = true;
+    }
+    // Unmount raced the async setup: end() already tore the session down —
+    // bail or we'd resurrect an orphaned interval speaking into disposed audio.
+    if (this.ended) return;
     this.publish(true);
     this.resumedAtWall = Date.now();
     this.interval = setInterval(() => this.tick(), TICK_MS);
@@ -102,7 +115,7 @@ export class PlaybackController {
     this.ended = true;
     if (this.interval) clearInterval(this.interval);
     this.interval = null;
-    this.deps.speaker.stop();
+    this.deps.speaker.dispose();
     this.deps.sfx.endSession();
     this.onEnd(true);
   }
@@ -186,6 +199,7 @@ export class PlaybackController {
       currentComboText: this.dispatchedText,
       recentCombos: this.recent.slice(1),
       isPaused: this.selfPaused,
+      startError: this.startError,
     };
     const key = JSON.stringify(state);
     if (force || key !== this.lastState) {

@@ -5,7 +5,9 @@ export interface Speaker {
   speak(text: string): void;
   /** Flush everything queued (used on pause/end). */
   stop(): void;
-  /** Initialize the TTS engine so the first real callout is not delayed. */
+  /** Release all underlying resources (used at session end). */
+  dispose(): void;
+  /** Initialize the TTS engine so the first callout is not delayed. */
   warmUp(): void;
 }
 
@@ -20,6 +22,9 @@ export function createSpeaker(): Speaker {
       });
     },
     stop() {
+      Speech.stop();
+    },
+    dispose() {
       Speech.stop();
     },
     warmUp() {

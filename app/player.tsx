@@ -72,6 +72,10 @@ export default function PlayerScreen() {
         ))}
       </View>
 
+      {state.startError && (
+        <Text style={styles.errorBanner}>Audio failed to start — running silent. Timer continues.</Text>
+      )}
+
       <View style={styles.controls}>
         <Pressable
           style={[styles.controlButton, state.isPaused ? styles.controlPrimary : styles.controlSecondary]}
@@ -123,6 +127,7 @@ const styles = StyleSheet.create({
   currentCombo: { color: '#fff', fontSize: 34, fontWeight: '700', letterSpacing: 1 },
   recentCombo: { color: '#8e8e96', fontSize: 20, fontVariant: ['tabular-nums'] },
   recentComboOlder: { color: '#52525b', fontSize: 16 },
+  errorBanner: { color: '#fb7185', fontSize: 14, textAlign: 'center' },
   controls: { flexDirection: 'row', gap: 10, width: '100%' },
   controlButton: {
     flex: 1,
