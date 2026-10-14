@@ -5,6 +5,7 @@ export const VOICE_CLIPS: Record<string, number> = {
   'block': require('../assets/voice/block.mp3'),
   'check': require('../assets/voice/check.mp3'),
   'cross': require('../assets/voice/cross.mp3'),
+  'double-jab': require('../assets/voice/double-jab.mp3'),
   'elbow': require('../assets/voice/elbow.mp3'),
   'forward': require('../assets/voice/forward.mp3'),
   'hook': require('../assets/voice/hook.mp3'),

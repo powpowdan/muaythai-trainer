@@ -18,6 +18,11 @@ describe('voice clip vocabulary', () => {
     expect(MOVE_VOICE_TEXTS.length).toBeLessThan(CATALOG.length);
   });
 
+  it('the double-jab unit has its own multi-word clip text', () => {
+    expect(MOVE_VOICE_TEXTS).toContain('double jab');
+    expect(slug('double jab')).toBe('double-jab');
+  });
+
   it('includes round announcements one through twelve, rest, and time', () => {
     for (const n of ['one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine', 'ten', 'eleven', 'twelve']) {
       expect(ANNOUNCEMENT_TEXTS).toContain(`round ${n}`);

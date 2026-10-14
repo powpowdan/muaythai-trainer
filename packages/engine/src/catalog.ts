@@ -8,7 +8,9 @@ import type { Move } from './types';
 export const CATALOG: Move[] = [
   // Punches: jab, cross, hook by name; lead/rear hooks share the word
   // (side is implied by sequence — same pattern as kicks). Uppercuts cut.
+  // A doubled jab is its own unit (gym call: "double jab"), never two jabs.
   { id: 'jab', side: 'lead', type: 'punch', power: 'light', calloutText: 'jab', displayText: 'jab' },
+  { id: 'double-jab', side: 'lead', type: 'punch', power: 'light', calloutText: 'double jab', displayText: 'dbl jab', durationUnits: 1.5 },
   { id: 'cross', side: 'rear', type: 'punch', power: 'power', calloutText: 'cross', displayText: 'cross' },
   { id: 'lead-hook', side: 'lead', type: 'punch', power: 'power', calloutText: 'hook', displayText: 'hook' },
   { id: 'rear-hook', side: 'rear', type: 'punch', power: 'power', calloutText: 'hook', displayText: 'hook' },

@@ -7,6 +7,8 @@ import type { Intensity, Move, WorkoutConfig } from './types';
 export interface IntensityParams {
   minLen: number;
   maxLen: number;
+  /** Length cap for pure-boxing combos — punches chain faster than clinch work. */
+  boxingMaxLen: number;
   /** Average silence between callouts in a round. Smaller = denser. */
   gapSeconds: number;
   /** Probability a combo opens with a lead-side setup. */
@@ -16,9 +18,9 @@ export interface IntensityParams {
 }
 
 export const INTENSITY_PARAMS: Record<Intensity, IntensityParams> = {
-  easy: { minLen: 2, maxLen: 4, gapSeconds: 8, leadOpeningBias: 0.8, strikeSeconds: 0.9 },
-  moderate: { minLen: 2, maxLen: 5, gapSeconds: 6, leadOpeningBias: 0.75, strikeSeconds: 0.75 },
-  hard: { minLen: 2, maxLen: 6, gapSeconds: 4.5, leadOpeningBias: 0.7, strikeSeconds: 0.6 },
+  easy: { minLen: 2, maxLen: 4, boxingMaxLen: 4, gapSeconds: 8, leadOpeningBias: 0.8, strikeSeconds: 0.9 },
+  moderate: { minLen: 2, maxLen: 5, boxingMaxLen: 6, gapSeconds: 6, leadOpeningBias: 0.75, strikeSeconds: 0.75 },
+  hard: { minLen: 2, maxLen: 6, boxingMaxLen: 6, gapSeconds: 4.5, leadOpeningBias: 0.7, strikeSeconds: 0.6 },
 };
 
 // ---------------------------------------------------------------------------
@@ -48,40 +50,103 @@ function weightedPick<T>(rng: Rng, items: T[], weight: (item: T) => number): T {
 }
 
 // ---------------------------------------------------------------------------
-// Combo grammar: role templates + constrained fill.
+// Combo grammar: range-phase families + constrained fill.
+//
+// Every combo is a walk through space: box at range, finish with a kick
+// (covers the exit, returns to range) or close in for clinch weapons.
 // ---------------------------------------------------------------------------
-type SlotRole = 'open' | 'power' | 'any' | 'finisher';
+type ComboFamily = 'boxing' | 'box-kick' | 'close' | 'range';
+type SlotRole = 'punch' | 'kick' | 'clinch' | 'rangeLight';
 
-// Role filters. 'open' resolves at fill time via leadOpeningBias: lead setup
-// strike with probability `bias`, any strike otherwise (the ~30% counters).
+// Family mix (tuning surface): boxing ~30%, box-kick ~35%, close ~25%, range ~10%.
+const FAMILY_WEIGHTS: Record<ComboFamily, number> = {
+  boxing: 3.0,
+  'box-kick': 3.5,
+  close: 2.5,
+  range: 1.0,
+};
+
+// Templates per family. First slot resolves to the family's chain role
+// ('punch', or 'rangeLight' for range) under the lead-opening bias; the
+// close family's standard entries carry a >=2-punch prefix before clinch
+// slots so closing reads as a deliberate step in, not a teleport.
+const TEMPLATES: { family: ComboFamily; slots: SlotRole[]; weight: number }[] = [
+  // Boxing: punch-only chains; jab chainable anywhere (1-2, 1-2-3, 1-2-1-2…)
+  { family: 'boxing', slots: ['punch', 'punch'], weight: 2 },
+  { family: 'boxing', slots: ['punch', 'punch', 'punch'], weight: 3 },
+  { family: 'boxing', slots: ['punch', 'punch', 'punch', 'punch'], weight: 2.5 },
+  { family: 'boxing', slots: ['punch', 'punch', 'punch', 'punch', 'punch'], weight: 1.5 },
+  { family: 'boxing', slots: ['punch', 'punch', 'punch', 'punch', 'punch', 'punch'], weight: 1 },
+  // Box-kick: punch chain into a kick finish that resets the range
+  { family: 'box-kick', slots: ['punch', 'kick'], weight: 1 },
+  { family: 'box-kick', slots: ['punch', 'punch', 'kick'], weight: 3 },
+  { family: 'box-kick', slots: ['punch', 'punch', 'punch', 'kick'], weight: 3 },
+  { family: 'box-kick', slots: ['punch', 'punch', 'punch', 'punch', 'kick'], weight: 1.5 },
+  { family: 'box-kick', slots: ['punch', 'punch', 'punch', 'punch', 'punch', 'kick'], weight: 1 },
+  // Close: punches in, clinch weapons finish; hook-out after; rare direct entry
+  { family: 'close', slots: ['punch', 'punch', 'clinch'], weight: 3 },
+  { family: 'close', slots: ['punch', 'punch', 'punch', 'clinch'], weight: 2.5 },
+  { family: 'close', slots: ['punch', 'punch', 'punch', 'punch', 'clinch'], weight: 1 },
+  { family: 'close', slots: ['punch', 'punch', 'punch', 'punch', 'punch', 'clinch'], weight: 0.5 },
+  { family: 'close', slots: ['punch', 'punch', 'clinch', 'clinch'], weight: 1.75 },
+  { family: 'close', slots: ['punch', 'punch', 'punch', 'clinch', 'clinch'], weight: 1.75 },
+  { family: 'close', slots: ['punch', 'punch', 'clinch', 'punch'], weight: 0.5 },
+  { family: 'close', slots: ['punch', 'clinch'], weight: 0.3 },
+  // Range: jab/teep play — feints, range breaks, single-leg pokes
+  { family: 'range', slots: ['rangeLight', 'rangeLight'], weight: 2 },
+  { family: 'range', slots: ['rangeLight', 'rangeLight', 'rangeLight'], weight: 1 },
+];
+
+/** Which slot roles can open each family's chain. */
+const FAMILY_CHAIN_ROLE: Record<ComboFamily, SlotRole> = {
+  boxing: 'punch',
+  'box-kick': 'punch',
+  close: 'punch',
+  range: 'rangeLight',
+};
+
 function roleCandidates(role: SlotRole, strikes: Move[]): Move[] {
   switch (role) {
-    case 'open':
-      return strikes;
-    case 'power':
-      return strikes.filter((m) => m.power === 'power');
-    case 'any':
-      return strikes;
-    case 'finisher':
-      return strikes.filter((m) => m.power === 'power' && m.type !== 'punch');
+    case 'punch':
+      return strikes.filter((m) => m.type === 'punch');
+    case 'kick':
+      return strikes.filter((m) => m.type === 'kick' && m.power === 'power');
+    case 'clinch':
+      return strikes.filter((m) => m.type === 'knee' || m.type === 'elbow');
+    case 'rangeLight':
+      return strikes.filter(
+        (m) => (m.type === 'punch' && m.power === 'light') || TEEP_IDS.has(m.id),
+      );
   }
 }
 
-// Gym-lifted archetypes. Weighted per template; length filtered by intensity.
-const TEMPLATES: { slots: SlotRole[]; weight: number }[] = [
-  { slots: ['open', 'power'], weight: 2 },
-  { slots: ['open', 'power', 'power'], weight: 3 },
-  { slots: ['open', 'power', 'finisher'], weight: 3 },
-  { slots: ['open', 'power', 'power', 'finisher'], weight: 3 },
-  { slots: ['open', 'power', 'any', 'power'], weight: 2 },
-  { slots: ['open', 'finisher'], weight: 1 },
-  { slots: ['open', 'power', 'power', 'power', 'finisher'], weight: 1.5 },
-  { slots: ['open', 'power', 'any', 'power', 'finisher'], weight: 1.5 },
-  { slots: ['open', 'power', 'power', 'power', 'power', 'finisher'], weight: 0.5 },
-];
+// Role draw weights — rhythm tuning, never legality.
+const DOUBLE_JAB_WEIGHT = 0.4;
+const JAB_CHAIN_WEIGHT = 0.8;
+const TEEP_RANGE_WEIGHT = 0.8;
+const ELBOW_CLINCH_WEIGHT = 0.35;
+
+function roleWeight(role: SlotRole, move: Move): number {
+  switch (role) {
+    case 'punch':
+      if (move.id === 'double-jab') return DOUBLE_JAB_WEIGHT;
+      if (move.id === 'jab') return JAB_CHAIN_WEIGHT;
+      return 1;
+    case 'kick':
+      return 1;
+    case 'clinch':
+      return move.type === 'elbow' ? ELBOW_CLINCH_WEIGHT : 1;
+    case 'rangeLight':
+      if (move.id === 'double-jab') return DOUBLE_JAB_WEIGHT;
+      if (TEEP_IDS.has(move.id)) return TEEP_RANGE_WEIGHT;
+      return 1;
+  }
+}
 
 const MAX_RETRIES = 8;
-const ALLOWED_REPEATS = new Set(['jab', 'lead-teep', 'rear-teep']);
+// Trained same-move repeats. Jab is NOT here: a doubled jab is the
+// 'double-jab' unit, never two raw jabs.
+const ALLOWED_REPEATS = new Set(['lead-teep', 'rear-teep']);
 
 // ---------------------------------------------------------------------------
 // Range rules — elbows close the distance; 'back' is the voiced step-out.
@@ -106,10 +171,10 @@ export interface ComboOptions {
 
 /** Transition constraint: can `next` follow `prev`? */
 function canFollow(prev: Move, next: Move): boolean {
-  // The step-out exits only the elbow lock, and you don't step straight
-  // back in (or out again) immediately after stepping out.
+  // The step-out exits only the elbow lock into range work: no second
+  // step-out, no elbow, and no knee (you just gave the ground back).
   if (prev.id === STEP_BACK_ID) {
-    return next.id !== STEP_BACK_ID && next.type !== 'elbow';
+    return next.id !== STEP_BACK_ID && next.type !== 'elbow' && next.type !== 'knee';
   }
   if (next.id === STEP_BACK_ID) {
     return prev.type === 'elbow';
@@ -118,7 +183,7 @@ function canFollow(prev: Move, next: Move): boolean {
   if (prev.type === 'elbow' && !CLINCH_TYPES.has(next.type) && !HOOK_IDS.has(next.id)) {
     return false;
   }
-  // Same-side power chains are unnatural — except trained doubles (jab, teep)
+  // Same-side power chains are unnatural — except trained doubles (teep)
   // and clinch chains, where rotation carries through in close.
   const clinchChain = CLINCH_TYPES.has(prev.type) && CLINCH_TYPES.has(next.type);
   if (
@@ -133,10 +198,10 @@ function canFollow(prev: Move, next: Move): boolean {
   if (prev.type === 'kick' && next.type === 'kick' && prev.side === next.side) {
     return false;
   }
-  // Identical power strikes back to back (e.g. cross-cross) also fail above;
-  // identical light strikes only allowed for trained doubles.
-  if (prev.id === next.id && next.power === 'power') {
-    return false;
+  // Identical strikes back to back only for trained repeats (teeps); a
+  // doubled jab is the 'double-jab' unit, and two units make a quad.
+  if (prev.id === next.id) {
+    return ALLOWED_REPEATS.has(next.id);
   }
   return true;
 }
@@ -179,9 +244,10 @@ function candidateWeight(prev: Move | null, next: Move): number {
 }
 
 /**
- * Generate one combo. Bounded retries with fresh rng draws; falls back to a
- * minimal [setup, opposite-side power] combo when constraints are tight
- * (e.g. very few enabled moves).
+ * Generate one combo. Family first (the mix dial), then a template within
+ * the family, then constrained fill. Bounded retries with fresh rng draws;
+ * falls back to a minimal [setup, opposite-side power] combo when
+ * constraints are tight (e.g. very few enabled moves).
  */
 export function generateCombo(
   rng: Rng,
@@ -192,46 +258,59 @@ export function generateCombo(
   if (strikes.length === 0) return [];
 
   const stepBack = MOVES_BY_ID.get(STEP_BACK_ID)!;
-  const usable = TEMPLATES.filter(
-    (t) => t.slots.length >= params.minLen && t.slots.length <= params.maxLen,
-  );
+  const usable = TEMPLATES.filter((t) => {
+    const cap = t.family === 'boxing' ? params.boxingMaxLen : params.maxLen;
+    return t.slots.length >= params.minLen && t.slots.length <= cap;
+  });
   const templates = usable.length > 0 ? usable : TEMPLATES.slice(0, 1);
+  const families = Object.keys(FAMILY_WEIGHTS) as ComboFamily[];
 
   for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
-    const template = weightedPick(rng, templates, (t) => t.weight);
+    const family = weightedPick(rng, families, (f) => {
+      const available = templates.some((t) => t.family === f);
+      return available ? FAMILY_WEIGHTS[f] : 0;
+    });
+    const familyTemplates = templates.filter((t) => t.family === family);
+    const template = weightedPick(rng, familyTemplates, (t) => t.weight);
+    const chainRole = FAMILY_CHAIN_ROLE[family];
     const combo: Move[] = [];
     let backUsed = false;
     let ok = true;
 
     for (let slot = 0; slot < template.slots.length; slot++) {
-      const role = template.slots[slot];
+      const role = slot === 0 ? chainRole : template.slots[slot];
       let candidates = roleCandidates(role, strikes);
-      if (role === 'open' && rng() < params.leadOpeningBias) {
+      // First slot honors the lead-opening bias (counters bypass it).
+      if (slot === 0 && rng() < params.leadOpeningBias) {
         const setups = candidates.filter(isSetup);
         if (setups.length > 0) candidates = setups;
       }
       if (combo.length > 0) {
         const prev = combo[combo.length - 1];
-        const following = candidates.filter((m) => canFollow(prev, m) && (m.id !== prev.id || ALLOWED_REPEATS.has(m.id)));
-        if (following.length > 0) candidates = following;
-        else {
+        const following = candidates.filter((m) => canFollow(prev, m));
+        if (following.length === 0) {
           ok = false;
           break;
         }
+        candidates = following;
       }
       if (candidates.length === 0) {
         ok = false;
         break;
       }
       const prev = combo.length > 0 ? combo[combo.length - 1] : null;
-      combo.push(weightedPick(rng, candidates, (m) => candidateWeight(prev, m)));
+      combo.push(weightedPick(rng, candidates, (m) => roleWeight(role, m) * candidateWeight(prev, m)));
 
       // Free 'back' exit after an elbow — spoken step-out, no slot consumed.
+      // Only offered when range work resumes next (never before another
+      // clinch slot): stepping out and immediately clinching again reads
+      // as a teleport.
       if (
         options.backEnabled &&
         !backUsed &&
         combo[combo.length - 1].type === 'elbow' &&
         slot < template.slots.length - 1 &&
+        template.slots[slot + 1] !== 'clinch' &&
         rng() < BACK_EXIT_CHANCE
       ) {
         combo.push(stepBack);
@@ -248,7 +327,13 @@ export function generateCombo(
 }
 
 function fallbackCombo(strikes: Move[]): string[] {
-  if (strikes.length === 1) return [strikes[0].id, strikes[0].id];
+  if (strikes.length === 1) {
+    const only = strikes[0];
+    // A lone jab cannot pair with itself — doubling is the unit's job.
+    // Degenerate config: emit a single-move callout and let the caller cope.
+    if (only.id === 'jab') return ['jab'];
+    return [only.id, only.id];
+  }
   const setup = strikes.find(isSetup) ?? strikes[0];
   const partner =
     strikes.find((m) => m.id !== setup.id && canFollow(setup, m)) ??

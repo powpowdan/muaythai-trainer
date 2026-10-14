@@ -1,7 +1,7 @@
 import { MOVES_BY_ID, type TimelineEvent, type WorkoutTimeline } from '@muaythai/engine';
 
 export interface PlaybackDeps {
-  speaker: { speak(text: string): void; stop(): void; dispose(): void };
+  speaker: { speak(text: string, wordWeights?: number[]): void; stop(): void; dispose(): void };
   sfx: {
     playBell(kind: 'round-start' | 'round-end' | 'final'): void;
     startSession(): void | Promise<void>;
@@ -164,6 +164,7 @@ export class PlaybackController {
           .join('-');
         this.deps.speaker.speak(
           ev.moveIds.map((id) => moveCallout(id)).join(', '),
+          ev.moveIds.map((id) => MOVES_BY_ID.get(id)?.durationUnits ?? 1),
         );
         this.pushCombo(text);
         break;

@@ -1,8 +1,13 @@
 import * as Speech from 'expo-speech';
 
 export interface Speaker {
-  /** Queue one utterance. Numbers-as-words text, single combo per call. */
-  speak(text: string): void;
+  /**
+   * Queue one utterance. Numbers-as-words text, single combo per call.
+   * Optional per-word weights (parallel to the comma-split words) stretch
+   * multi-strike words like "double jab": each following word starts after
+   * the preceding words' weighted durations, not merely word index × tempo.
+   */
+  speak(text: string, wordWeights?: number[]): void;
   /** Flush everything queued (used on pause/end). */
   stop(): void;
   /** Release all underlying resources (used at session end). */

@@ -16,6 +16,11 @@ function announcement(text: string, at: number): TimelineEvent {
   return { kind: 'announcement', at, calloutText: text, displayText: text };
 }
 
+/** Total strike-tempo units a combo occupies (multi-strike units count more). */
+export function strikeUnits(moveIds: string[]): number {
+  return moveIds.reduce((sum, id) => sum + (MOVES_BY_ID.get(id)?.durationUnits ?? 1), 0);
+}
+
 function scheduleWorkRound(
   round: number,
   start: number,
@@ -38,7 +43,7 @@ function scheduleWorkRound(
   while (t < end - BELL_SAFETY_MARGIN) {
     const moveIds = generateCombo(rng, params, strikes, { backEnabled: !disabled.has('step-back') });
     if (moveIds.length < 2) break; // not enough enabled strikes to build combos
-    const duration = moveIds.length * params.strikeSeconds + 0.4;
+    const duration = strikeUnits(moveIds) * params.strikeSeconds + 0.4;
     if (t + duration > end - BELL_SAFETY_MARGIN) break;
     events.push({ kind: 'callout', at: t, moveIds, durationSeconds: duration });
     const gap = params.gapSeconds * (0.75 + 0.5 * rng());

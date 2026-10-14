@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { generateWorkout } from '../src/scheduler';
+import { generateWorkout, strikeUnits } from '../src/scheduler';
 import type { WorkoutConfig, WorkoutTimeline } from '../src/types';
 
 function config(partial: Partial<WorkoutConfig> = {}): WorkoutConfig {
@@ -116,6 +116,24 @@ describe('scheduler: density monotonic with intensity', () => {
     expect(counts[0]).toBeLessThanOrEqual(counts[1]);
     expect(counts[1]).toBeLessThanOrEqual(counts[2]);
     expect(counts[2]).toBeGreaterThan(0);
+  });
+});
+
+describe('scheduler: pacing of multi-strike units', () => {
+  it('a combo containing double-jab is paced longer than the same combo with a plain jab', () => {
+    const strikeSeconds = 0.75;
+    const withUnit = strikeUnits(['double-jab', 'cross', 'lead-hook']) * strikeSeconds + 0.4;
+    const withJab = strikeUnits(['jab', 'cross', 'lead-hook']) * strikeSeconds + 0.4;
+    expect(withUnit).toBeCloseTo(1.5 * 0.75 + 2 * 0.75 + 0.4, 5);
+    expect(withJab).toBeCloseTo(3 * 0.75 + 0.4, 5);
+    expect(withUnit - withJab).toBeCloseTo(0.5 * strikeSeconds, 5);
+  });
+
+  it('every catalog move contributes at least one strike unit', () => {
+    for (const id of ['jab', 'cross', 'lead-hook', 'rear-kick', 'lead-knee', 'lead-elbow', 'lead-teep']) {
+      expect(strikeUnits([id])).toBeGreaterThanOrEqual(1);
+    }
+    expect(strikeUnits(['double-jab'])).toBe(1.5);
   });
 });
 

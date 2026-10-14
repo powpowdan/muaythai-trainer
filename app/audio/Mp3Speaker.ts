@@ -33,7 +33,7 @@ export function createMp3Speaker(strikeSeconds: number): Speaker {
   };
 
   return {
-    speak(text: string) {
+    speak(text: string, wordWeights?: number[]) {
       const words = text.split(',').map((w) => w.trim());
       const names = words.map(slug);
       const allClipsReady = names.length > 0 && names.every((n) => n in VOICE_CLIPS);
@@ -42,9 +42,17 @@ export function createMp3Speaker(strikeSeconds: number): Speaker {
         Speech.speak(text, { language: 'en-US', rate: 1.15 });
         return;
       }
+      // Cumulative offsets: a weighted word (e.g. "double jab") pushes the
+      // next word's beat back proportionally instead of one uniform slot.
+      let at = 0;
+      const offsets: number[] = [];
+      for (let i = 0; i < names.length; i++) {
+        offsets.push(at);
+        at += (wordWeights?.[i] ?? 1) * strikeSeconds;
+      }
       names.forEach((name, i) => {
         pendingTimeouts.push(
-          setTimeout(() => playClip(name), i * strikeSeconds * 1000),
+          setTimeout(() => playClip(name), offsets[i] * 1000),
         );
       });
     },

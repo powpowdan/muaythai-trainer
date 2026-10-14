@@ -14,6 +14,11 @@ export interface Move {
   calloutText: string;
   /** Compact on-screen text: '1', 'kick', 'slip'. */
   displayText: string;
+  /**
+   * Strike tempo this move occupies (default 1). Multi-strike units like
+   * 'double-jab' declare more so combo pacing and word spacing stay honest.
+   */
+  durationUnits?: number;
 }
 
 export interface WorkoutConfig {
